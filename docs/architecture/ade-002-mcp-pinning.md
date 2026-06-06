@@ -196,11 +196,40 @@ O nome do arquivo (`ade-002-mcp-pinning.md`) segue a referência já gravada na 
 
 ---
 
+## Addendum — Decisões abertas resolvidas no gate da Story 2.5 (2026-06-06)
+
+O quality gate da Story 2.5 (@architect) confirmou a implementação e fecha as 3 questões que o @dev deixou em aberto para o @architect (Dev Agent Record → "Para @architect"). Estas decisões **complementam** as Invariantes 1–5 sem alterá-las.
+
+### Decisão A — Host do McpServer = **Azure Container App** (resolve o "em aberto" da Inv 2)
+
+A Invariante 2 deixou a escolha final de host (Container App vs Function .NET isolated) como ponto de design da Task 3. **Decisão: Azure Container App.** Justificativa:
+
+- O McpServer é um servidor HTTP de **longa duração** que serve **Streamable HTTP** (`MapMcp()`); esse é o caso de uso natural de um Container App, não de uma Function event-driven. Streaming + cold start de scale-to-zero de Functions atritam com a sessão MCP.
+- **Mesma justificativa e mesmo host do gateway YARP** (ADE-004 Inv 2) → uniformidade operacional (mesmo ACR, mesmo padrão de Dockerfile multi-stage, mesma malha de deploy `deploy-phase-05.yml`).
+- O `Dockerfile` do McpServer (multi-stage SDK 8.0 → aspnet 8.0) já foi adaptado do gateway; o workflow já faz `az containerapp update`. Implementação coerente com a decisão. **Trade-off aceito:** abre-se mão da uniformidade "tudo em Functions"; ganha-se aderência ao modelo de servidor HTTP persistente. Function isolated permanece alternativa teórica, mas **não recomendada** para este caso de streaming.
+
+### Decisão B — Proxy LLM **dentro do McpServer** = ACEITÁVEL para o escopo do workshop
+
+O `LlmProxyEndpoints.cs` (rotas `/llm/{provider}/{*path}`) vive no mesmo host do McpServer. **Decisão: aceitável**, com ressalva registrada:
+
+- **Pró (decisivo no escopo didático):** reuso de host + App Settings (as keys já estão no Container App do McpServer); mantém "tudo passa pelo gateway" (o front fala `/llm` no gateway → cluster `mcp-server`); menos um artefato de deploy para o aluno provisionar em 8h.
+- **Separação de responsabilidades é fraca, mas mitigada:** o proxy só injeta a key e encaminha o corpo cru ao endpoint oficial pinado (Inv 3) — não há acoplamento lógico com as tools MCP; são endpoints minimal-API independentes do pipeline `MapMcp`. A key nunca toca o front (fail-safe 503 sem key; CI guard no `dist/`).
+- **Ressalva (não bloqueante):** num produto real, o proxy de LLM seria um BFF/serviço próprio (limite de blast radius da key, escala independente). Para o workshop, a co-hospedagem é a escolha pragmática correta. Registrado como nota de evolução pós-epic; **não exige mudança nesta fase.**
+
+### Decisão C — Rótulos `VIP/Cat1/Cat2` no PIVOT **NÃO batem com o seed real** → CONCERN (correção obrigatória)
+
+A Task 3.5 (`consultar_disponibilidade`) faz PIVOT condicional em `tc.category = 'VIP' / 'Cat1' / 'Cat2'`. **Verificação contra o seed canônico** (`fifa2026-api/database/migrations/2026-05-08-real-fifa-prices.sql`, o mais recente; idem `legacy/seed.sql`) mostra que os rótulos reais de `ticket_categories.category` são **`'VIP Premium'`, `'Categoria 1'`, `'Categoria 2'`** (e `'Categoria 3'` no legacy). Os rótulos do código (`'VIP'`, `'Cat1'`, `'Cat2'`) **não existem na base** → todas as somas do PIVOT retornariam **0** e os preços **NULL** para qualquer partida real.
+
+- **Risco:** AC-3 falha em runtime (a tool "encontra" a partida mas reporta disponibilidade zero/sem preço); o smoke test AC-11 ("Tem ingresso para Brasil x Argentina?") daria resposta incorreta ao vivo.
+- **Por que os testes não pegaram:** todos os 32 testes mockam `IFifaQueryRepository`; o SQL real nunca roda contra o schema real. É exatamente a lacuna que o @dev sinalizou ("seed em runtime").
+- **Recomendação (obrigatória antes do deploy):** alinhar o PIVOT aos rótulos reais — `'VIP Premium'`, `'Categoria 1'`, `'Categoria 2'` — preferencialmente com casamento case-insensitive e tolerante a variação (ex.: `LIKE 'VIP%'`, `'Categoria 1'`/`'Cat1'`) para resiliência entre seeds (legacy vs real-fifa-prices). Validar a query real contra a base no início da aula (paridade com a validação de seed de outras fases). Detalhe e patch sugerido no gate report `docs/qa/2026-06-06-architect-gate-S2.5.md`.
+
 ## Change Log
 
 | Date | Author | Description |
 |---|---|---|
 | 2026-06-06 | @architect (Aria) | ADE criada — pin MCP C# SDK 1.4.0 exato, LLM no front (endpoint/modelo pinados), n8n `2.23.4` exato. |
+| 2026-06-06 | @architect (Aria) | **Addendum (gate Story 2.5):** resolvidas as 3 questões abertas do @dev — (A) host McpServer = Azure Container App; (B) proxy LLM co-hospedado no McpServer = aceitável (ressalva BFF pós-epic); (C) rótulos `VIP/Cat1/Cat2` do PIVOT NÃO batem com o seed real (`VIP Premium`/`Categoria 1`/`Categoria 2`) → CONCERN, correção obrigatória antes do deploy. Pinos .NET e endpoints LLM inalterados. |
 | 2026-06-06 | @architect (Aria) | **owner override — n8n → `latest`.** Decisão de owner: container n8n passa a usar `n8nio/n8n:latest` (sempre a versão mais nova). Invariante 4 reescrita; Invariante 5 ("proibido floating") reescopada para pacotes/SDK .NET com n8n como exceção explícita aprovada. Rationale, Consequences, Alternatives (Alt 1/1b), Validation e tabela de Impacto atualizados de forma coerente. Trade-off de reprodutibilidade documentado (mitigação: validar workflow no início de cada aula + aula gravada com a versão do dia). **MCP SDK 1.4.0 e endpoints LLM permanecem inalterados.** |
 
 **Authority:** Aria (Architect) — designado por @aiox-master para decisões de seleção de tecnologia, versionamento e integração.
