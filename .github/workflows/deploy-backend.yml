@@ -1,55 +1,55 @@
-name: Deploy Backend (FIFA 2026 API)
-
-# Empacota o backend Node.js (com node_modules de produção e web.config
-# do iisnode) e publica no Azure Web App for Windows.
-#
-# Triggers:
-#   - workflow_dispatch (manual)
-#   - push em main: roda quando algo em fifa2026-api/ ou neste workflow muda
+name: Deploy Frontend (FIFA 2026 Web)
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
-    inputs:
-      app_name:
-        description: 'Azure Web App name (backend)'
-        required: true
-        default: 'fifa2026-back'
+
+permissions:
+  id-token: write
+  contents: read
 
 env:
-  WORKING_DIR: 'fifa2026-api'
-  NODE_VERSION: '18'
-  DEFAULT_APP_NAME: 'fifa2026-back'
+  WORKING_DIR: fifa2026-web
+  NODE_VERSION: 18
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     environment: production
-
+    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+    - name: Checkout code
+      uses: actions/checkout@v5
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: ${{ env.WORKING_DIR }}/package-lock.json
+    - name: Azure Login (OIDC)
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Install production dependencies
-        working-directory: ${{ env.WORKING_DIR }}
-        run: npm ci --omit=dev
+    - name: Setup Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: ${{ env.WORKING_DIR }}/package-lock.json
 
-      - name: Cleanup before packaging
-        working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          rm -rf logs src/logs
-          rm -f .env
+    - name: Install dependencies
+      run: npm ci --omit=dev
+      working-directory: ${{ env.WORKING_DIR }}
 
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          # Precedência: input manual → GitHub Variable (aluno) → default (prod legado)
-          app-name: ${{ github.event.inputs.app_name || vars.BACKEND_APP_NAME || env.DEFAULT_APP_NAME }}
-          publish-profile: ${{ secrets.AZURE_BACKEND_PUBLISH_PROFILE }}
-          package: ${{ env.WORKING_DIR }}
+    - name: Build frontend
+      run: npm run build
+      working-directory: ${{ env.WORKING_DIR }}
+      env:
+        VITE_API_URL: https://${{ vars.BACKEND_APP_NAME }}.azurewebsites.net/api
+        BACKEND_URL: https://${{ vars.BACKEND_APP_NAME }}.azurewebsites.net
+
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ vars.FRONTEND_APP_NAME }}
+        package: ${{ env.WORKING_DIR }}/dist
+        slot-name: production
