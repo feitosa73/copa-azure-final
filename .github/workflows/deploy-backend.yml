@@ -1,4 +1,4 @@
-name: Deploy Frontend (FIFA 2026 Web)
+name: Deploy Backend (FIFA 2026 API)
 
 on:
   push:
@@ -53,3 +53,4 @@ jobs:
         app-name: ${{ vars.FRONTEND_APP_NAME }}
         package: ${{ env.WORKING_DIR }}/dist
         slot-name: production
+
