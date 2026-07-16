@@ -1,12 +1,5 @@
 name: Deploy Frontend (FIFA 2026 Web)
 
-# Builda o frontend com a BACKEND_URL embutida no web.config e
-# publica no Azure Web App definido nos inputs.
-#
-# Triggers:
-#   - workflow_dispatch (manual): permite escolher backend_url e app_name
-#   - push em main: roda quando algo no Lovable/ ou neste workflow muda
-
 on:
   push:
     branches: [ main ]
@@ -17,14 +10,13 @@ permissions:
   contents: read
 
 env:
-  WORKING_DIR: fifa2026-web
+  WORKING_DIR: "Lovable/World Cup Tickets Hub"
   NODE_VERSION: 18
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: production
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
@@ -40,8 +32,6 @@ jobs:
       uses: actions/setup-node@v5
       with:
         node-version: ${{ env.NODE_VERSION }}
-        cache: 'npm'
-        cache-dependency-path: ${{ env.WORKING_DIR }}/package-lock.json
 
     - name: Install dependencies
       run: npm install
