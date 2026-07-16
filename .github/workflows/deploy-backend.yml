@@ -40,18 +40,13 @@ jobs:
       run: npm install
       working-directory: ${{ env.WORKING_DIR }}
 
-    - name: Build frontend
-      run: npm run build
-      working-directory: ${{ env.WORKING_DIR }}
-      env:
-        VITE_API_URL: https://${{ vars.BACKEND_APP_NAME }}.azurewebsites.net/api
-        BACKEND_URL: https://${{ vars.BACKEND_APP_NAME }}.azurewebsites.net
-
+    
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v3
       with:
         app-name: ${{ vars.FRONTEND_APP_NAME }}
-        package: ${{ env.WORKING_DIR }}/dist
+        package: ${{ env.WORKING_DIR }}
         slot-name: production
+
 
 
