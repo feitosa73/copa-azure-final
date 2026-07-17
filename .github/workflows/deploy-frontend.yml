@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  WORKING_DIR: "Lovable/World Cup Tickets Hub"
+  WORKING_DIR: "fifa2026-web"
   NODE_VERSION: 18
 
 jobs:
